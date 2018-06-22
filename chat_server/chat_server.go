@@ -13,6 +13,13 @@ import(
 	"bytes"
 	"time"
 	"reflect"
+	"github.com/garyburd/redigo/redis"
+	"crypto/md5"  
+    "crypto/rand"  
+	"encoding/base64" 
+	"encoding/hex"  
+	"io"
+	
 //	"reflect"
 //	"bytes"
 )
@@ -24,13 +31,34 @@ type message struct{
 	message_content string
 }
 
+type auth_info struct{
+	id string
+	session_guid string
+	content string
+}
+
 type login_info struct{
 	id string
 	password string
 	time_stamp string
 	request string
-	log_chan chan message
+	log_chan chan auth_info
 }
+
+type reply_info struct{
+	reply string
+	messages []message
+}
+
+type request_info struct{
+	request string
+	session_guid string
+	messages []message
+	reply_chan chan reply_info
+}
+
+
+
 
 type session struct {
 tcp_connection net.Conn
@@ -44,10 +72,12 @@ type User_Table map[string]session
 func main(){
 	var chan_buffer_size=50
 	user_table:=make(User_Table)
-	//请求处理过程
-	request_process_chan:=make(chan message,chan_buffer_size)
+
 	//身份验证过程
 	login_process_chan:=make(chan login_info,chan_buffer_size)
+	//请求处理过程
+	request_process_chan:=make(chan request_info,chan_buffer_size)
+	
 	addr:="127.0.0.1:2563"
 	listener,err:=net.Listen("tcp",addr)
 	if err != nil {
@@ -65,7 +95,7 @@ func main(){
 	}
 }
 
-func handle_conn(conn net.Conn,user_table * User_Table,request_process_chan chan message,login_process_chan chan login_info){
+func handle_conn(conn net.Conn,user_table * User_Table,request_process_chan chan request_info,login_process_chan chan login_info){
 	
 	content_buff,err:=read_content(conn)
 	if err!=nil{
@@ -74,7 +104,7 @@ func handle_conn(conn net.Conn,user_table * User_Table,request_process_chan chan
 	}
 	//解析json内容
 	var user_info =make(map[string]string)
-	conn.Write([]byte("ok"))
+	
 	err=json.Unmarshal(content_buff, &user_info)
 	if err!=nil{
 		conn.Close()
@@ -90,57 +120,111 @@ func handle_conn(conn net.Conn,user_table * User_Table,request_process_chan chan
         log.Println(err)
         return
 	}
-	recv_log.log_chan=make(chan message)
+	recv_log.log_chan=make(chan auth_info)
 	login_process_chan<-recv_log
 
 	auth_message:=<-recv_log.log_chan
-	if auth_message.message_content!="AUTH"{
+	if auth_message.content=="AUTH"{
+		conn.Write([]byte("AUTH"))
+	}else{
+		conn.Write([]byte(auth_message.content))
 		return
 	}
-
-	//暂无
-	var this_session session
-	this_session.tcp_connection=conn
-	this_session.conn_time_stamp=time.Now().Unix()
-	this_session.send_channel=recv_log.log_chan
-	(*user_table)[id]=this_session
+	//获取链接的标示符
+	session_guid:=auth_message.session_guid
 
 
 for {
+
+	request_data:=request_info{}
+	replay_pipe:=make(chan reply_info)
 	content_buff,err=read_content(conn)
 	if err!=nil{
 		conn.Close()
 		return 
 	}
-	recv_m := message{}
 
-    err := json.Unmarshal(content_buff, &recv_m)
+    err := json.Unmarshal(content_buff, &request_data)
     if err != nil {
 
         log.Println(err)
         return
 	}
-	recv_m.send_time_stamp=time.Now().Unix()
-	recv_m.sender_id=user_info["id"]
-	recv_m.sender_ip=conn.RemoteAddr().String()
+	request_data.reply_chan=replay_pipe
+	request_data.session_guid=session_guid
 	//请求送入处理过程
-	request_process_chan<-recv_m
+	request_process_chan<-request_data
 	//获取处理结果,发送数据
-	send_m:=<-this_session.send_channel
-	t := reflect.TypeOf(send_m)
-	v := reflect.ValueOf(send_m)
+	reply_content:=<-request_data.reply_chan
 
-	var data = make(map[string]interface{})
-	for i := 0; i < t.NumField(); i++ {
-	data[t.Field(i).Name] = v.Field(i).Interface()
-	}
-		json_string,_:=json.Marshal(data)
+		json_string,_:=json.Marshal(reply_content)
 		send_string:=write_content(json_string)
 		_, err = conn.Write([]byte(send_string))
+		if err!=nil{
+			conn.Close()
+			delete(*user_table,id)
+		}
 }
 
 }
 
+
+func login_process(login_process_chan chan login_info){
+	c, err := redis.Dial("tcp", "127.0.0.1:6379")
+    if err != nil {
+        fmt.Println("Connect to redis error", err)
+        return
+    }
+    defer c.Close()
+
+	log_reply_message:=new(auth_info)
+
+	for {
+		login_info:=<-login_process_chan
+		if login_info.request=="login" {
+			//登录处理
+			returned_password,err:=redis.String(c.Do("HGET","user_auth",login_info.id))
+			if login_info.password==returned_password&&err!=nil{
+				log_reply_message.content="AUTH"
+				log_reply_message.session_guid=UniqueId(login_info.id)
+				//检测是否已经登录
+				n,err:=redis.String(c.Do("HGET", "user_guid",login_info.id))
+				if n!=""&&err==nil {
+				//解除guid--id映射(解除guid的id权限)
+				_,err=c.Do("HDEL", "guid_id",n)
+				}
+				//替换id----guid映射,guid---id映射(允许路由,允许id权限)
+				_,err=redis.Bool(c.Do("HSET", "user_guid",login_info.id,log_reply_message.session_guid))
+				_,err=redis.Bool(c.Do("HSET", "guid_id",log_reply_message.session_guid,login_info.id))	
+			//....
+			}else {log_reply_message.content="UNEXCEPTECED ERROR"}
+
+		}else if login_info.request=="regist" {
+			//注册处理
+			is_usable, err := redis.Bool(c.Do("HSETNX", "user_auth",login_info.id,login_info.password))
+			if err == nil&&is_usable==true{log_reply_message.content="AUTH"
+			//guid处理
+			log_reply_message.session_guid=UniqueId(login_info.id)
+			_,err=c.Do("HSET", "user_guid",login_info.id,log_reply_message.session_guid)
+			_,err=c.Do("HSET", "guid_id",log_reply_message.session_guid,login_info.id)
+					
+			}else {log_reply_message.content="UNEXCEPTECED ERROR"}
+    		//....
+
+		}else {
+			//default处理
+			log_reply_message.content="UNRECOGNIZED REQUEST"
+			//返回结果
+			login_info.log_chan<-*log_reply_message
+		}
+
+
+	}
+}
+
+func request_process(request_process_chan chan message)
+
+//tcp 切流
 func read_content(conn net.Conn) (content_buff []byte,err error) {
 	reader:=bufio.NewReader(conn)
 
@@ -190,5 +274,24 @@ func write_content(json_string []byte ) (send_string []byte ){
 
 	send_string=append(length_Buffer.Bytes(),json_string...)
 	return send_string
-	
+	//tongbuc
 }
+
+//生成32位md5字串  
+func GetMd5String(s string) string {  
+    h := md5.New()  
+    h.Write([]byte(s))  
+    return hex.EncodeToString(h.Sum(nil))  
+}  
+  
+//生成Guid字串  
+func UniqueId(s string) string {  
+    b := make([]byte, 8)  
+    
+    if _, err := io.ReadFull(rand.Reader, b); err != nil {  
+        return ""  
+    } 
+     s+=string(b)
+     fmt.Println(s)
+    return GetMd5String(base64.URLEncoding.EncodeToString(b))  
+} 

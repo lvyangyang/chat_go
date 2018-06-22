@@ -11,8 +11,8 @@ import(
 	"encoding/json"
 	"encoding/binary"
 	"bytes"
-	"time"
-	"reflect"
+//	"time"
+//	"reflect"
 	"github.com/garyburd/redigo/redis"
 	"crypto/md5"  
     "crypto/rand"  
@@ -111,7 +111,7 @@ func handle_conn(conn net.Conn,user_table * User_Table,request_process_chan chan
 		return
 	}
 	fmt.Println(user_info)
-	id:=user_info["id"]
+	
 	//检查权限
 	recv_log := login_info{}
     err = json.Unmarshal(content_buff, &recv_log)
@@ -120,38 +120,48 @@ func handle_conn(conn net.Conn,user_table * User_Table,request_process_chan chan
         log.Println(err)
         return
 	}
+	//发送登录信息到登录处理过程
 	recv_log.log_chan=make(chan auth_info)
 	login_process_chan<-recv_log
-
+	//获得返回结果
 	auth_message:=<-recv_log.log_chan
-	if auth_message.content=="AUTH"{
-		conn.Write([]byte("AUTH"))
-	}else{
-		conn.Write([]byte(auth_message.content))
+	//结果送回socket另一端
+	json_string,_:=json.Marshal(auth_message)
+	send_string:=write_content(json_string)
+	_, err = conn.Write([]byte(send_string))
+	if err!=nil{
+		conn.Close()
 		return
+	}
+	//检查权限情况(该链接被授予guid权限)
+	if auth_message.content!="AUTH"{
+		conn.Close()
+		return
+		
 	}
 	//获取链接的标示符
 	session_guid:=auth_message.session_guid
 
-
+//循环处理请求
 for {
 
 	request_data:=request_info{}
 	replay_pipe:=make(chan reply_info)
+	//读取请求
 	content_buff,err=read_content(conn)
 	if err!=nil{
 		conn.Close()
-		return 
+		break 
 	}
 
     err := json.Unmarshal(content_buff, &request_data)
     if err != nil {
-
+		conn.Close()
         log.Println(err)
-        return
+        break
 	}
 	request_data.reply_chan=replay_pipe
-	request_data.session_guid=session_guid
+	request_data.session_guid=session_guid//标示链接的客户端,guid将被授予id权限
 	//请求送入处理过程
 	request_process_chan<-request_data
 	//获取处理结果,发送数据
@@ -162,14 +172,21 @@ for {
 		_, err = conn.Write([]byte(send_string))
 		if err!=nil{
 			conn.Close()
-			delete(*user_table,id)
+			break
 		}
+		//检查这个会话是否依然有效,过期或者登录顶替(检查guid的id权限是否依旧有效)
+		if reply_content.reply=="TIMEOUT"||reply_content.reply=="OCCUPIED"{
+		conn.Close()
+		break
+		}
+		
 }
 
 }
 
 
 func login_process(login_process_chan chan login_info){
+	//链接redis服务器
 	c, err := redis.Dial("tcp", "127.0.0.1:6379")
     if err != nil {
         fmt.Println("Connect to redis error", err)
@@ -190,7 +207,7 @@ func login_process(login_process_chan chan login_info){
 				//检测是否已经登录
 				n,err:=redis.String(c.Do("HGET", "user_guid",login_info.id))
 				if n!=""&&err==nil {
-				//解除guid--id映射(解除guid的id权限)
+				//解除guid--id映射(解除上一个guid的该id权限)
 				_,err=c.Do("HDEL", "guid_id",n)
 				}
 				//替换id----guid映射,guid---id映射(允许路由,允许id权限)
@@ -222,7 +239,10 @@ func login_process(login_process_chan chan login_info){
 	}
 }
 
-func request_process(request_process_chan chan message)
+//请求处理(检查guid是否依旧有id权限,将消息照表送入相应的guid bucket,检查guid bucket内的消息,并返回请求)
+func request_process(request_process_chan chan request_info){
+
+}
 
 //tcp 切流
 func read_content(conn net.Conn) (content_buff []byte,err error) {

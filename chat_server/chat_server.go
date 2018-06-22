@@ -243,6 +243,11 @@ func login_process(login_process_chan chan login_info){
 func request_process(request_process_chan chan request_info){
 
 }
+//发送失败的消息回收送入redis
+func recollect_process(recollect_process_chan chan message){
+
+}
+
 
 //tcp 切流
 func read_content(conn net.Conn) (content_buff []byte,err error) {

@@ -7,7 +7,7 @@ import(
 //	"io"
 	"bufio"
 //	"time"
-//	"strconv"
+	"strconv"
 	"encoding/json"
 	"encoding/binary"
 	"bytes"
@@ -42,12 +42,13 @@ type login_info struct{
 	password string
 	time_stamp string
 	request string
+	session_guid string
 	log_chan chan auth_info
 }
 
 type reply_info struct{
 	reply string
-	messages []message
+	messages []string
 }
 
 type request_info struct{
@@ -57,45 +58,43 @@ type request_info struct{
 	reply_chan chan reply_info
 }
 
-
-
-
-type session struct {
-tcp_connection net.Conn
-conn_time_stamp int64
-send_channel  chan message
-}
-
-type User_Table map[string]session
-
-
 func main(){
 	var chan_buffer_size=50
-	user_table:=make(User_Table)
+//	user_table:=make(User_Table)
 
 	//身份验证过程
 	login_process_chan:=make(chan login_info,chan_buffer_size)
 	//请求处理过程
 	request_process_chan:=make(chan request_info,chan_buffer_size)
 	
+	recollect_process_chan:=make(chan []string,chan_buffer_size)
+	//..........
 	addr:="127.0.0.1:2563"
 	listener,err:=net.Listen("tcp",addr)
 	if err != nil {
 	   log.Fatal(err)
 	    }
 	defer listener.Close()
+	//后端处理过程
+	i:=1
+	for i<chan_buffer_size {
+		i++
+		go login_process(login_process_chan)
+		go request_process(request_process_chan)
+		go recollect_process(recollect_process_chan)
+	}
+	//--------
 	for {
 		conn,err:=listener.Accept()
 		if err!=nil{
 			log.Fatal(err)
 		}
-	//	timestamp := time.Now().Unix()
-
-		go handle_conn(conn,&user_table,request_process_chan,login_process_chan)
+		go handle_conn(conn,request_process_chan,login_process_chan,recollect_process_chan)
 	}
+	//------------------
 }
 
-func handle_conn(conn net.Conn,user_table * User_Table,request_process_chan chan request_info,login_process_chan chan login_info){
+func handle_conn(conn net.Conn,request_process_chan chan request_info,login_process_chan chan login_info,recollect_process_chan chan []string){
 	
 	content_buff,err:=read_content(conn)
 	if err!=nil{
@@ -170,16 +169,20 @@ for {
 		json_string,_:=json.Marshal(reply_content)
 		send_string:=write_content(json_string)
 		_, err = conn.Write([]byte(send_string))
+	
 		if err!=nil{
 			conn.Close()
+			if len(reply_content.messages)>0{
+				recollect_process_chan<-reply_content.messages
+			}
 			break
 		}
-		//检查这个会话是否依然有效,过期或者登录顶替(检查guid的id权限是否依旧有效)
-		if reply_content.reply=="TIMEOUT"||reply_content.reply=="OCCUPIED"{
-		conn.Close()
-		break
-		}
+		//检查这个会话是否依然有效,错误或者登录顶替(检查guid的id权限是否依旧有效)
+		if reply_content.reply=="ERROR"||reply_content.reply=="OCCUPIED"{
+			conn.Close() 
+			break}
 		
+			
 }
 
 }
@@ -194,57 +197,126 @@ func login_process(login_process_chan chan login_info){
     }
     defer c.Close()
 
-	log_reply_message:=new(auth_info)
+	
 
 	for {
+		log_reply_message:=new(auth_info)
 		login_info:=<-login_process_chan
+		//登录处理
 		if login_info.request=="login" {
-			//登录处理
 			returned_password,err:=redis.String(c.Do("HGET","user_auth",login_info.id))
 			if login_info.password==returned_password&&err!=nil{
 				log_reply_message.content="AUTH"
 				log_reply_message.session_guid=UniqueId(login_info.id)
 				//检测是否已经登录
-				n,err:=redis.String(c.Do("HGET", "user_guid",login_info.id))
+				n,err:=redis.String(c.Do("HGET", "id_guid",login_info.id))
 				if n!=""&&err==nil {
 				//解除guid--id映射(解除上一个guid的该id权限)
-				_,err=c.Do("HDEL", "guid_id",n)
+					_,err=c.Do("HDEL", "guid_id",n)
 				}
 				//替换id----guid映射,guid---id映射(允许路由,允许id权限)
-				_,err=redis.Bool(c.Do("HSET", "user_guid",login_info.id,log_reply_message.session_guid))
+				_,err=redis.Bool(c.Do("HSET", "id_guid",login_info.id,log_reply_message.session_guid))
 				_,err=redis.Bool(c.Do("HSET", "guid_id",log_reply_message.session_guid,login_info.id))	
-			//....
+				//....
 			}else {log_reply_message.content="UNEXCEPTECED ERROR"}
-
+		//重新登录处理
+		}else if login_info.request=="relogin"{
+			n,err:=redis.String(c.Do("HGET", "guid_id",login_info.session_guid))
+			if n!=""&&err==nil {
+				log_reply_message.content="AUTH"
+				}
+		//注册处理
 		}else if login_info.request=="regist" {
-			//注册处理
+			
 			is_usable, err := redis.Bool(c.Do("HSETNX", "user_auth",login_info.id,login_info.password))
-			if err == nil&&is_usable==true{log_reply_message.content="AUTH"
-			//guid处理
-			log_reply_message.session_guid=UniqueId(login_info.id)
-			_,err=c.Do("HSET", "user_guid",login_info.id,log_reply_message.session_guid)
-			_,err=c.Do("HSET", "guid_id",log_reply_message.session_guid,login_info.id)
+			if err == nil&&is_usable==true{
+				log_reply_message.content="AUTH"
+				//guid处理
+				log_reply_message.session_guid=UniqueId(login_info.id)
+				_,err=c.Do("HSET", "id_guid",login_info.id,log_reply_message.session_guid)
+				_,err=c.Do("HSET", "guid_id",log_reply_message.session_guid,login_info.id)
 					
-			}else {log_reply_message.content="UNEXCEPTECED ERROR"}
-    		//....
-
+			}else {
+				log_reply_message.content="UNEXCEPTECED ERROR"
+			}
+    		
+		//default处理
 		}else {
-			//default处理
-			log_reply_message.content="UNRECOGNIZED REQUEST"
-			//返回结果
-			login_info.log_chan<-*log_reply_message
+			
+			log_reply_message.content="UNRECOGNIZED REQUEST"	
 		}
+		//返回结果
+		login_info.log_chan<-*log_reply_message
 
 
 	}
 }
 
-//请求处理(检查guid是否依旧有id权限,将消息照表送入相应的guid bucket,检查guid bucket内的消息,并返回请求)
+//请求处理(检查guid是否依旧有id权限,将消息照表送入相应的id bucket,检查id bucket内的消息,并返回请求)
 func request_process(request_process_chan chan request_info){
+	c, err := redis.Dial("tcp", "127.0.0.1:6379")
+    if err != nil {
+        fmt.Println("Connect to redis error", err)
+        return
+    }
+	defer c.Close()
+	
+	
+	for {
+		reply_content:=new(reply_info)
+		request:=<-request_process_chan	
+		//先校验guid
+		id,err:=redis.String(c.Do("HGET", "guid_id",request.session_guid))
+		if id==""||err!=nil{
+		reply_content.reply="OCCUPIED"
+		request.reply_chan<-*reply_content	
+			continue			
+		}
+		//发送消息
+		if request.request=="send_message"{	
+		for _,one_message:=range request.messages{
+			json_string,_:=json.Marshal(one_message)
+			_,err:=c.Do("SADD", one_message.receiver_id,json_string)
+			if err!=nil{
+				log.Println(err)
+				continue
+			}
+		}
+		reply_content.reply="OK"
+		request.reply_chan<-*reply_content	
+		}
+	//主动拉取消息
+		if request.request=="get_message"{
+			reply_content.messages,err=redis.Strings(c.Do("SMEMBERS",id))
+			if err!=nil {
+				reply_content.reply=strconv.Itoa(len(reply_content.messages))
+			}else { reply_content.reply="ERROR"}
+			request.reply_chan<-*reply_content		
+		}
+		}
 
 }
 //发送失败的消息回收送入redis
-func recollect_process(recollect_process_chan chan message){
+func recollect_process(recollect_process_chan chan []string){
+	c, err := redis.Dial("tcp", "127.0.0.1:6379")
+    if err != nil {
+        fmt.Println("Connect to redis error", err)
+        return
+    }
+    defer c.Close()
+
+	for {
+		message_recycle:=message{}
+		messages:=<-recollect_process_chan
+		for _,one_message:=range messages{
+			err:=json.Unmarshal([]byte(one_message),message_recycle)
+			if err!=nil{ log.Println(err)}
+			c.Send("SADD",message_recycle.receiver_id,one_message)
+		}
+		c.Flush()
+		_, err:=c.Receive()
+		if err!=nil{ log.Println(err)}
+	}
 
 }
 

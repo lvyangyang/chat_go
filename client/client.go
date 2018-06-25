@@ -11,40 +11,39 @@ import (
 	"bufio"
 )
 type message struct{
-	receiver_id string
-	sender_id string
-	sender_ip string
-	send_time_stamp int64
-	message_content string
+	Receiver_id string `json:"Receiver_id"`
+	Sender_id string `json:"Sender_id"`
+	Sender_ip string `json:"Sender_ip"`
+	Send_time_stamp int64 `json:"Send_time_stamp"`
+	Message_content string `json:"Message_content"`
 }
 
 type auth_info struct{
-	id string
-	session_guid string
-	content string
+	Id string `json:"Id"`
+	Session_guid string `json:"Session_guid"`
+	Content string `json:"Content"`
 }
 
 type login_info struct{
-	id string
-	password string
-	time_stamp string
-	request string
-	session_guid string
-	log_chan chan auth_info
+	Id string `json:"Id"`
+	Password string `json:"Password"`
+	Time_stamp string `json:"Time_stamp"`
+	Request string `json:"Request"`
+	Session_guid string `json:"Session_guid"`
+	log_chan chan auth_info 
 }
 
 type reply_info struct{
-	reply string
-	messages []string
+	Reply string `json:"Reply"`
+	Messages []string `json:"Messages"`
 }
 
 type request_info struct{
-	request string
-	session_guid string
-	messages []message
+	Request string `json:"Request"`
+	Session_guid string `json:"Session_guid"`
+	Messages []message `json:"Messages"`
 	reply_chan chan reply_info
 }
-
 
 func main() {
 	tcpAddr:="127.0.0.1:2563"

@@ -40,7 +40,7 @@ type auth_info struct{
 type login_info struct{
 	Id string `json:"Id"`
 	Password string `json:"Password"`
-	Time_stamp string `json:"Time_stamp"`
+	Time_stamp int64 `json:"Time_stamp"`
 	Request string `json:"Request"`
 	Session_guid string `json:"Session_guid"`
 	log_chan chan auth_info 
@@ -58,15 +58,19 @@ type request_info struct{
 	reply_chan chan reply_info
 }
 
+type push_chan struct{
+	Ready bool
+	Messages_chan chan []string
+}
+
 func main(){
 	var chan_buffer_size=50
-//	user_table:=make(User_Table)
-
-	//身份验证过程
+	push_conn_table:=make(map[string]push_chan)
+	//身份验证
 	login_process_chan:=make(chan login_info,chan_buffer_size)
-	//请求处理过程
+	//请求处理
 	request_process_chan:=make(chan request_info,chan_buffer_size)
-	
+	//回收
 	recollect_process_chan:=make(chan []string,chan_buffer_size)
 	//..........
 	addr:="127.0.0.1:2563"
@@ -75,15 +79,15 @@ func main(){
 	   log.Fatal(err)
 	    }
 	defer listener.Close()
-	//后端处理过程
+	//启动所有后端过程
 	i:=1
 	for i<chan_buffer_size {
 		i++
-		go login_process(login_process_chan)
-		go request_process(request_process_chan)
-		go recollect_process(recollect_process_chan)
+		go login_process(login_process_chan) //登录
+		go request_process(request_process_chan)//请求处理
+		go recollect_process(recollect_process_chan)//回收发送失败的消息
 	}
-	//--------
+	//----------
 	for {
 		conn,err:=listener.Accept()
 		if err!=nil{
@@ -101,16 +105,6 @@ func handle_conn(conn net.Conn,request_process_chan chan request_info,login_proc
 		conn.Close()
 		return 
 	}
-	//解析json内容
-	var user_info =make(map[string]string)
-	
-	err=json.Unmarshal(content_buff, &user_info)
-	if err!=nil{
-		conn.Close()
-		return
-	}
-	fmt.Println(user_info)
-	
 	//检查权限
 	recv_log := login_info{}
     err = json.Unmarshal(content_buff, &recv_log)
@@ -187,6 +181,9 @@ func handle_conn(conn net.Conn,request_process_chan chan request_info,login_proc
 
 }
 
+func handle_push(conn net.Conn,login_process_chan chan login_info,push_conn_table map[string]push_chan){
+	
+}
 
 func login_process(login_process_chan chan login_info){
 	//链接redis服务器

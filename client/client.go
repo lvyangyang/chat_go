@@ -3,12 +3,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+//	"io/ioutil"
 	"net"
 	"os"
 	"encoding/binary"
 	"bytes"
 	"bufio"
+	"time"
 )
 type message struct{
 	Receiver_id string `json:"Receiver_id"`
@@ -27,7 +28,7 @@ type auth_info struct{
 type login_info struct{
 	Id string `json:"Id"`
 	Password string `json:"Password"`
-	Time_stamp string `json:"Time_stamp"`
+	Time_stamp int64 `json:"Time_stamp"`
 	Request string `json:"Request"`
 	Session_guid string `json:"Session_guid"`
 	log_chan chan auth_info 
@@ -49,18 +50,23 @@ func main() {
 	tcpAddr:="127.0.0.1:2563"
 	conn, err := net.Dial("tcp", tcpAddr)
 	checkError(err)
-	user_info:=make(map[string]string)
-	user_info["id"]="1234541"
-	user_info["password"]="0215151"
-	user_info["request"]="login"
+	
+	user_info:=login_info{}
+	user_info.Id="12345"
+	user_info.Password="12345"
+	user_info.Request="regist"
+	user_info.Time_stamp=time.Now().Unix()
+	
+
 	json_string,err:=json.Marshal(user_info)
 
 	send_string:=write_content(json_string)
 	string_length, err := conn.Write([]byte(send_string))
 	fmt.Println(string_length)
 	checkError(err)
-	result, err := ioutil.ReadAll(conn)
+	result, err := read_content(conn)
 	checkError(err)
+
 	fmt.Println(string(result))
 	os.Exit(0)
 }

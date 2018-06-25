@@ -10,6 +10,41 @@ import (
 	"bytes"
 	"bufio"
 )
+type message struct{
+	receiver_id string
+	sender_id string
+	sender_ip string
+	send_time_stamp int64
+	message_content string
+}
+
+type auth_info struct{
+	id string
+	session_guid string
+	content string
+}
+
+type login_info struct{
+	id string
+	password string
+	time_stamp string
+	request string
+	session_guid string
+	log_chan chan auth_info
+}
+
+type reply_info struct{
+	reply string
+	messages []string
+}
+
+type request_info struct{
+	request string
+	session_guid string
+	messages []message
+	reply_chan chan reply_info
+}
+
 
 func main() {
 	tcpAddr:="127.0.0.1:2563"
@@ -36,6 +71,8 @@ func checkError(err error) {
 		os.Exit(1)
 	}
 }
+
+
 
 func read_content(conn net.Conn) (content_buff []byte,err error) {
 	reader:=bufio.NewReader(conn)

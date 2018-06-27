@@ -452,7 +452,8 @@ func recollect_process(recollect_process_chan chan []string){
         fmt.Println("Connect to redis error", err)
         return
     }
-    defer c.Close()
+	defer c.Close()
+	count:=0
 	t := time.NewTimer(time.Millisecond * 5)
 	message_recycle:=message{}
 	for {
@@ -464,15 +465,19 @@ func recollect_process(recollect_process_chan chan []string){
 				 log.Println(err)
 			}
 			c.Send("SADD",message_recycle.Receiver_id,one_message)
+			count++
+			if count>100{
+				c.Flush()
+			}
 			}
 		case <-t.C:
 			t.Reset(time.Millisecond * 1)
-			c.Flush()			
+			c.Flush()	
+			count=0		
 		}
 	}
 
 }
-
 
 //tcp 切流
 func read_content(conn net.Conn) (content_buff []byte,err error) {

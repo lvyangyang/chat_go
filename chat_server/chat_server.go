@@ -70,27 +70,28 @@ type id_guid_pair struct{
 }
 
 func main(){
-	var chan_buffer_size=10
+	var chan_buffer_size=4
 	//guid--->channel
 	push_conn_table:=make(map[string]*push_chan)
 	//身份验证
 	login_process_chan:=make(chan login_info,chan_buffer_size)
 	//请求处理
 	request_process_chan:=make(chan request_info,chan_buffer_size)
-	id_guid_chan:=make(chan id_guid_pair,chan_buffer_size/2)
+	id_guid_chan:=make(chan id_guid_pair,chan_buffer_size)
 	//回收
 	recollect_process_chan:=make(chan []string,chan_buffer_size)
-
+	kick_off_list_chan:=make(chan string,chan_buffer_size)
 	//启动所有后端过程
 	i:=1
 	for i<chan_buffer_size {
 		i++
-		go login_process(login_process_chan) //登录
+		go login_process(login_process_chan,kick_off_list_chan) //登录
 		go request_process(request_process_chan,id_guid_chan)//请求处理
 		go push_backen_process(id_guid_chan ,&push_conn_table)
 		go recollect_process(recollect_process_chan)//回收发送失败的消息
 	}
-
+	go kick_off_process(kick_off_list_chan ,&push_conn_table)
+	
 	//----推送端口监听
 	addr_push:="127.0.0.1:2564"
 	listener_push,err:=net.Listen("tcp",addr_push)
@@ -285,6 +286,7 @@ func push_backen_process(id_guid_chan chan id_guid_pair,push_conn_table * map[st
 		id_guid:=<-id_guid_chan
 		push_channel,ok:=(*push_conn_table)[id_guid.Guid]
 		if ok{
+			//阻塞状态的连接直接放弃推送
 			if push_channel.Ready==true{
 				number,err:=redis.Int(c.Do("SCARD",id_guid.Id))
 				reply_content.Messages,err=redis.Strings(c.Do("SPOP",id_guid.Id,number))
@@ -295,12 +297,7 @@ func push_backen_process(id_guid_chan chan id_guid_pair,push_conn_table * map[st
 					}
 
 				push_channel.Messages_chan<-reply_content	
-				}else {
-					id_guid_chan<-id_guid
-				}							
-		}else{
-			reply_content.Reply="OCCUPIED"
-			push_channel.Messages_chan<-reply_content
+				}						
 		}
 	}
 
@@ -324,7 +321,7 @@ func kick_off_process(kick_off_list_chan chan string,push_conn_table * map[strin
 	
 }
 
-func login_process(login_process_chan chan login_info){
+func login_process(login_process_chan chan login_info,kick_off_list_chan chan string){
 	//链接redis服务器
 	c, err := redis.Dial("tcp", "127.0.0.1:6379")
     if err != nil {
@@ -350,6 +347,8 @@ func login_process(login_process_chan chan login_info){
 				if n!=""&&err==nil {
 				//解除guid--id映射(解除上一个guid的该id权限)
 					_,err=c.Do("HDEL", "guid_id",n)
+				//推送下线要求通知
+					kick_off_list_chan<-n
 				}
 				//替换id----guid映射,guid---id映射(允许路由,允许id权限)
 				_,err=redis.Bool(c.Do("HSET", "id_guid",login_info.Id,log_reply_message.Session_guid))

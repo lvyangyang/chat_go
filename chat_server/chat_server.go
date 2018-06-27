@@ -11,7 +11,7 @@ import(
 	"encoding/json"
 	"encoding/binary"
 	"bytes"
-//	"time"
+	"time"
 //	"reflect"
 	"github.com/garyburd/redigo/redis"
 	"crypto/md5"  
@@ -52,6 +52,7 @@ type reply_info struct{
 }
 
 type request_info struct{
+	Id string `json:"Id"`
 	Request string `json:"Request"`
 	Session_guid string `json:"Session_guid"`
 	Messages []message `json:"Messages"`
@@ -157,14 +158,12 @@ func handle_conn(conn net.Conn,request_process_chan chan request_info,login_proc
 		return
 		
 	}
-	//获取链接的标示符
-	Session_guid:=auth_message.Session_guid
 
+
+	request_data:=request_info{}
+	replay_pipe:=make(chan reply_info)
 //循环处理请求
 	for {
-
-		request_data:=request_info{}
-		replay_pipe:=make(chan reply_info)
 		//读取请求
 		content_buff,err=read_content(conn)
 		if err!=nil{
@@ -179,7 +178,10 @@ func handle_conn(conn net.Conn,request_process_chan chan request_info,login_proc
 			break
 		}
 		request_data.reply_chan=replay_pipe
-		request_data.Session_guid=Session_guid//标示链接的客户端,guid将被授予id权限
+
+		request_data.Session_guid=auth_message.Session_guid//标示链接的客户端,guid将被授予id权限
+		request_data.Id=auth_message.Id
+
 		//请求送入处理过程
 		request_process_chan<-request_data
 		//获取处理结果,发送数据
@@ -277,29 +279,49 @@ func push_backen_process(id_guid_chan chan id_guid_pair,push_conn_table * map[st
         return
     }
 	defer c.Close()
-	
+	reply_content:=reply_info{}
 	for {
 
 		id_guid:=<-id_guid_chan
 		push_channel,ok:=(*push_conn_table)[id_guid.Guid]
 		if ok{
 			if push_channel.Ready==true{
-				reply_content:=reply_info{}
-			reply_content.Messages,_=redis.Strings(c.Do("SMEMBERS",id_guid.Id))
-			if err!=nil {
-				reply_content.Reply="OK"
-			}else { 
-				reply_content.Reply="ERROR"
-				}
-			push_channel.Messages_chan<-reply_content	
-			}else {
-				id_guid_chan<-id_guid
-			}
-			
-				
+				number,err:=redis.Int(c.Do("SCARD",id_guid.Id))
+				reply_content.Messages,err=redis.Strings(c.Do("SPOP",id_guid.Id,number))
+				if err!=nil {
+					reply_content.Reply="OK"
+				}else { 
+					reply_content.Reply="ERROR"
+					}
+
+				push_channel.Messages_chan<-reply_content	
+				}else {
+					id_guid_chan<-id_guid
+				}							
+		}else{
+			reply_content.Reply="OCCUPIED"
+			push_channel.Messages_chan<-reply_content
 		}
 	}
 
+}
+
+func kick_off_process(kick_off_list_chan chan string,push_conn_table * map[string]*push_chan){
+	kick_off_notice:=reply_info{}
+	kick_off_notice.Reply="OCCUPIED"
+	for {
+		kick_off_guid:=<-kick_off_list_chan
+		if (*push_conn_table)[kick_off_guid]!=nil  {
+			if  (*push_conn_table)[kick_off_guid].Ready {
+
+			(*push_conn_table)[kick_off_guid].Messages_chan<-kick_off_notice
+		}else {
+			kick_off_list_chan<-kick_off_guid
+		}
+		}
+		
+	}
+	
 }
 
 func login_process(login_process_chan chan login_info){
@@ -322,6 +344,7 @@ func login_process(login_process_chan chan login_info){
 			if login_info.Password==returned_password&&err!=nil{
 				log_reply_message.Content="AUTH"
 				log_reply_message.Session_guid=UniqueId(login_info.Id)
+				log_reply_message.Id=login_info.Id
 				//检测是否已经登录
 				n,err:=redis.String(c.Do("HGET", "id_guid",login_info.Id))
 				if n!=""&&err==nil {
@@ -336,8 +359,10 @@ func login_process(login_process_chan chan login_info){
 		//重新登录处理
 		}else if login_info.Request=="relogin"{
 			n,err:=redis.String(c.Do("HGET", "guid_id",login_info.Session_guid))
-			if n!=""&&err==nil {
+			if n==login_info.Id&&err==nil {
 				log_reply_message.Content="AUTH"
+				log_reply_message.Session_guid=login_info.Session_guid
+				log_reply_message.Id=login_info.Id
 				}
 		//注册处理
 		}else if login_info.Request=="regist" {
@@ -347,6 +372,7 @@ func login_process(login_process_chan chan login_info){
 				log_reply_message.Content="AUTH"
 				//guid处理
 				log_reply_message.Session_guid=UniqueId(login_info.Id)
+				log_reply_message.Id=login_info.Id
 				_,err=c.Do("HSET", "id_guid",login_info.Id,log_reply_message.Session_guid)
 				_,err=c.Do("HSET", "guid_id",log_reply_message.Session_guid,login_info.Id)
 					
@@ -380,7 +406,7 @@ func request_process(request_process_chan chan request_info,id_guid_chan chan id
 		reply_content:=new(reply_info)
 		Request:=<-request_process_chan	
 		//先校验guid
-	Id,err:=redis.String(c.Do("HGET", "guid_id",Request.Session_guid))
+		Id,err:=redis.String(c.Do("HGET", "guid_id",Request.Session_guid))
 		if Id==""||err!=nil{
 			reply_content.Reply="OCCUPIED"
 			Request.reply_chan<-*reply_content	
@@ -403,12 +429,14 @@ func request_process(request_process_chan chan request_info,id_guid_chan chan id
 					id_guid_chan<-id_guid
 				}
 			}
+			
 		reply_content.Reply="OK"
 		Request.reply_chan<-*reply_content	
 		}
 	//主动拉取消息
 		if Request.Request=="get_message"{
-			reply_content.Messages,err=redis.Strings(c.Do("SMEMBERS",Id))
+			number,err:=redis.Int(c.Do("SCARD",id_guid.Id))
+			reply_content.Messages,err=redis.Strings(c.Do("SPOP",id_guid.Id,number))
 			if err!=nil {
 				reply_content.Reply="OK"
 			}else { reply_content.Reply="ERROR"}
@@ -425,19 +453,21 @@ func recollect_process(recollect_process_chan chan []string){
         return
     }
     defer c.Close()
-
+	t := time.NewTimer(time.Millisecond * 5)
+	message_recycle:=message{}
 	for {
-		message_recycle:=message{}
-		Messages:=<-recollect_process_chan
-		for _,one_message:=range Messages{
+		select{
+		case Messages:=<-recollect_process_chan :
+			for _,one_message:=range Messages{
 			err:=json.Unmarshal([]byte(one_message),message_recycle)
-			if err!=nil{ log.Println(err)}
+			if err!=nil{
+				 log.Println(err)
+			}
 			c.Send("SADD",message_recycle.Receiver_id,one_message)
-		}
-		c.Flush()
-		_, err:=c.Receive()
-		if err!=nil{
-			 log.Println(err)
+			}
+		case <-t.C:
+			t.Reset(time.Millisecond * 1)
+			c.Flush()			
 		}
 	}
 

@@ -308,7 +308,8 @@ func kick_off_process(kick_off_list_chan chan string,push_conn_table * map[strin
 	kick_off_notice.Reply="OCCUPIED"
 	for {
 		kick_off_guid:=<-kick_off_list_chan
-		if (*push_conn_table)[kick_off_guid]!=nil  {
+		_,ok:=(*push_conn_table)[kick_off_guid]
+		if ok {
 			if  (*push_conn_table)[kick_off_guid].Ready {
 
 			(*push_conn_table)[kick_off_guid].Messages_chan<-kick_off_notice
@@ -470,7 +471,7 @@ func recollect_process(recollect_process_chan chan []string){
 			}
 			}
 		case <-t.C:
-			t.Reset(time.Millisecond * 1)
+			t.Reset(time.Millisecond * 5)
 			c.Flush()	
 			count=0		
 		}

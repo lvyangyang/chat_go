@@ -54,7 +54,7 @@ func main() {
 	user_info:=login_info{}
 	user_info.Id="12345"
 	user_info.Password="12345"
-	user_info.Request="regist"
+	user_info.Request="login"
 	user_info.Time_stamp=time.Now().Unix()
 	
 

@@ -338,8 +338,8 @@ func login_process(login_process_chan chan login_info,kick_off_list_chan chan st
 		login_info:=<-login_process_chan
 		//登录处理
 		if login_info.Request=="login" {
-			returned_password,err:=redis.String(c.Do("HGET","user_auth",login_info.Id))
-			if login_info.Password==returned_password&&err!=nil{
+			returned_password,_:=redis.String(c.Do("HGET","user_auth",login_info.Id))
+			if login_info.Password==returned_password{
 				log_reply_message.Content="AUTH"
 				log_reply_message.Session_guid=UniqueId(login_info.Id)
 				log_reply_message.Id=login_info.Id

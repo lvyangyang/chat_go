@@ -435,11 +435,13 @@ func request_process(request_process_chan chan request_info,id_guid_chan chan id
 		}
 	//主动拉取消息
 		if Request.Request=="get_message"{
-			number,err:=redis.Int(c.Do("SCARD",id_guid.Id))
-			reply_content.Messages,err=redis.Strings(c.Do("SPOP",id_guid.Id,number))
-			if err!=nil {
+			number,err:=redis.Int(c.Do("SCARD",Request.Id))
+		    if err!=nil {
+				reply_content.Reply="ERROR"
+			}else {
 				reply_content.Reply="OK"
-			}else { reply_content.Reply="ERROR"}
+				reply_content.Messages,err=redis.Strings(c.Do("SPOP",Request.Id,number))
+			}
 			Request.reply_chan<-*reply_content		
 		}
 	}

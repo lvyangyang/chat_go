@@ -2,9 +2,7 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="2c80ba8b-7abd-43d4-aea4-a3541979e622" name="Default" comment="">
-      <change afterPath="$PROJECT_DIR$/py_client_test/client.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/py_client_test/try.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/chat_server/chat_server.go" beforeDir="false" afterPath="$PROJECT_DIR$/chat_server/chat_server.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/py_client_test/client.py" beforeDir="false" afterPath="$PROJECT_DIR$/py_client_test/client.py" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="TRACKING_ENABLED" value="true" />
@@ -18,8 +16,8 @@
       <file leaf-file-name="client.py" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/py_client_test/client.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="241">
-              <caret line="52" column="24" lean-forward="true" selection-start-line="52" selection-start-column="24" selection-end-line="52" selection-end-column="24" />
+            <state relative-caret-position="673">
+              <caret line="141" column="11" lean-forward="true" selection-start-line="141" selection-start-column="11" selection-end-line="141" selection-end-column="11" />
               <folding>
                 <element signature="e#24#37#0" expanded="true" />
               </folding>
@@ -40,9 +38,9 @@
       </list>
     </option>
   </component>
-  <component name="ProjectFrameBounds" extendedState="7">
-    <option name="x" value="343" />
-    <option name="y" value="271" />
+  <component name="ProjectFrameBounds">
+    <option name="x" value="468" />
+    <option name="y" value="105" />
     <option name="width" value="1400" />
     <option name="height" value="963" />
   </component>
@@ -130,10 +128,10 @@
     <servers />
   </component>
   <component name="ToolWindowManager">
-    <frame x="65" y="-4" width="1855" height="1084" extended-state="7" />
+    <frame x="468" y="105" width="1400" height="963" extended-state="0" />
     <editor active="true" />
     <layout>
-      <window_info content_ui="combo" id="Project" order="0" visible="true" weight="0.18867925" />
+      <window_info content_ui="combo" id="Project" order="0" visible="true" weight="0.25" />
       <window_info anchor="bottom" id="TODO" order="6" />
       <window_info anchor="bottom" id="Event Log" order="7" sideWeight="0.50026953" side_tool="true" weight="0.3381001" />
       <window_info anchor="bottom" id="Version Control" order="7" />
@@ -142,7 +140,7 @@
       <window_info id="Structure" order="1" side_tool="true" weight="0.25" />
       <window_info anchor="bottom" id="Terminal" order="7" />
       <window_info id="Favorites" order="2" side_tool="true" />
-      <window_info active="true" anchor="bottom" id="Debug" order="3" sideWeight="0.49973047" visible="true" weight="0.3381001" />
+      <window_info anchor="bottom" id="Debug" order="3" sideWeight="0.49973047" weight="0.3381001" />
       <window_info anchor="right" content_ui="combo" id="Hierarchy" order="2" weight="0.25" />
       <window_info anchor="right" id="Commander" internal_type="SLIDING" order="0" type="SLIDING" weight="0.4" />
       <window_info anchor="right" id="Ant Build" order="1" weight="0.25" />
@@ -157,23 +155,6 @@
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
-      <breakpoints>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/py_client_test/client.py</url>
-          <line>153</line>
-          <option name="timeStamp" value="32" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/py_client_test/client.py</url>
-          <line>141</line>
-          <option name="timeStamp" value="33" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/py_client_test/client.py</url>
-          <line>148</line>
-          <option name="timeStamp" value="34" />
-        </line-breakpoint>
-      </breakpoints>
       <breakpoints-dialog>
         <breakpoints-dialog />
       </breakpoints-dialog>
@@ -188,6 +169,16 @@
     </breakpoint-manager>
   </component>
   <component name="editorHistoryManager">
+    <entry file="file://$PROJECT_DIR$/py_client_test/client.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="780">
+          <caret line="52" column="24" lean-forward="true" selection-start-line="52" selection-start-column="24" selection-end-line="52" selection-end-column="24" />
+          <folding>
+            <element signature="e#24#37#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/py_client_test/client.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="45">
@@ -284,8 +275,8 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/py_client_test/client.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="241">
-          <caret line="52" column="24" lean-forward="true" selection-start-line="52" selection-start-column="24" selection-end-line="52" selection-end-column="24" />
+        <state relative-caret-position="673">
+          <caret line="141" column="11" lean-forward="true" selection-start-line="141" selection-start-column="11" selection-end-line="141" selection-end-column="11" />
           <folding>
             <element signature="e#24#37#0" expanded="true" />
           </folding>

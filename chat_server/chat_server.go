@@ -60,7 +60,7 @@ type request_info struct{
 }
 
 type push_chan struct{
-	Ready bool
+	chan_buff_size int
 	Messages_chan chan reply_info
 }
 
@@ -244,13 +244,12 @@ func handle_push(conn net.Conn,login_process_chan chan login_info,push_conn_tabl
 	}
 
 	push_channel:=new(push_chan)
-	push_channel.Messages_chan=make(chan reply_info)
+	push_channel.chan_buff_size=20
+	push_channel.Messages_chan=make(chan reply_info,push_channel.chan_buff_size)
 	(*push_conn_table)[recv_log.Session_guid]=push_channel
 
 	for {
-		push_channel.Ready=true
 		Messages:=<-push_channel.Messages_chan
-		push_channel.Ready=false
 		json_string,err:=json.Marshal(Messages)
 		if err!=nil{
 			log.Println(err)
@@ -263,7 +262,6 @@ func handle_push(conn net.Conn,login_process_chan chan login_info,push_conn_tabl
 			recollect_process_chan<-Messages.Messages
 			break
 		}
-		
 		if Messages.Reply!="OK"{
 			conn.Close()
 			break
@@ -287,7 +285,7 @@ func push_backen_process(id_guid_chan chan id_guid_pair,push_conn_table * map[st
 		push_channel,ok:=(*push_conn_table)[id_guid.Guid]
 		if ok{
 			//阻塞状态的连接直接放弃推送
-			if push_channel.Ready==true{
+			if len(push_channel.Messages_chan)<push_channel.chan_buff_size{
 				number,err:=redis.Int(c.Do("SCARD",id_guid.Id))
 				reply_content.Messages,err=redis.Strings(c.Do("SPOP",id_guid.Id,number))
 				if err!=nil {
@@ -310,7 +308,7 @@ func kick_off_process(kick_off_list_chan chan string,push_conn_table * map[strin
 		kick_off_guid:=<-kick_off_list_chan
 		_,ok:=(*push_conn_table)[kick_off_guid]
 		if ok {
-			if  (*push_conn_table)[kick_off_guid].Ready {
+			if  len((*push_conn_table)[kick_off_guid].Messages_chan)<(*push_conn_table)[kick_off_guid].chan_buff_size {
 
 			(*push_conn_table)[kick_off_guid].Messages_chan<-kick_off_notice
 		}else {

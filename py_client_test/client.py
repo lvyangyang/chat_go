@@ -135,7 +135,8 @@ s.sendall(request_json)
 lne_bytes = s.recv(4)
 len_reply = struct.unpack(">I", lne_bytes)
 json_reply_info = s.recv(len_reply[0])
-reply_info_dict = json_loads_byteified(json_reply_info)
+reply_info_send_dict = json_loads_byteified(json_reply_info)
+print(reply_info_send_dict)
 # ------------
 
 # 拉取消息-----
@@ -149,7 +150,7 @@ s.sendall(request_json)
 lne_bytes = s.recv(4)
 len_reply = struct.unpack(">I", lne_bytes)
 json_reply_info = s.recv(len_reply[0])
-reply_info_dict = json_loads_byteified(json_reply_info)
+reply_info_get_dict = json_loads_byteified(json_reply_info)
 
-print(reply_info_dict)
+print(reply_info_get_dict)
 s.close()

@@ -70,7 +70,7 @@ type id_guid_pair struct{
 }
 
 func main(){
-	var chan_buffer_size=4
+	var chan_buffer_size=1
 	//guid--->channel
 	push_conn_table:=make(map[string]*push_chan)
 	//身份验证
@@ -82,7 +82,7 @@ func main(){
 	recollect_process_chan:=make(chan []string,chan_buffer_size)
 	kick_off_list_chan:=make(chan string,chan_buffer_size)
 	//启动所有后端过程
-	i:=1
+	i:=0
 	for i<chan_buffer_size {
 		i++
 		go login_process(login_process_chan,kick_off_list_chan) //登录
@@ -101,11 +101,13 @@ func main(){
 	defer listener_push.Close()
 
 	go func(){
-		conn_push,err:=listener_push.Accept()
-		if err!=nil{
-			log.Fatal(err)
+		for {
+			conn_push,err:=listener_push.Accept()
+			if err!=nil{
+				log.Fatal(err)
+			}
+			go handle_push(conn_push,login_process_chan,&push_conn_table,recollect_process_chan )
 		}
-		 handle_push(conn_push,login_process_chan,&push_conn_table,recollect_process_chan )
 	}()
 	//....主端口监听----------
 	addr:="127.0.0.1:2563"
@@ -120,12 +122,13 @@ func main(){
 		if err!=nil{
 			log.Fatal(err)
 		}
-		go handle_conn(conn,request_process_chan,login_process_chan,recollect_process_chan)
+		go handle_conn(conn,request_process_chan,login_process_chan,recollect_process_chan,kick_off_list_chan)
 	}
 	
 }
 
-func handle_conn(conn net.Conn,request_process_chan chan request_info,login_process_chan chan login_info,recollect_process_chan chan []string){
+func handle_conn(conn net.Conn,request_process_chan chan request_info,login_process_chan chan login_info,
+	recollect_process_chan chan []string,kick_off_list_chan chan string){
 	
 	content_buff,err:=read_content(conn)
 	if err!=nil{
@@ -188,24 +191,25 @@ func handle_conn(conn net.Conn,request_process_chan chan request_info,login_proc
 		//获取处理结果,发送数据
 		reply_content:=<-request_data.reply_chan
 
-			json_string,_:=json.Marshal(reply_content)
-			send_string:=write_content(json_string)
-			_, err = conn.Write([]byte(send_string))
-		
-			if err!=nil{
-				conn.Close()
-				if len(reply_content.Messages)>0{
-					recollect_process_chan<-reply_content.Messages
-				}
-				break
+		json_string,_:=json.Marshal(reply_content)
+		send_string:=write_content(json_string)
+		_, err = conn.Write([]byte(send_string))
+	
+		if err!=nil{
+			conn.Close()
+			if len(reply_content.Messages)>0{
+				recollect_process_chan<-reply_content.Messages
 			}
-			//检查这个会话是否依然有效,错误或者登录顶替(检查guid的id权限是否依旧有效)
-			if reply_content.Reply=="ERROR"||reply_content.Reply=="OCCUPIED"{
-				conn.Close() 
-				break}
+			break
+		}
+		//检查这个会话是否依然有效,错误或者登录顶替(检查guid的id权限是否依旧有效)
+		if reply_content.Reply=="ERROR"||reply_content.Reply=="OCCUPIED"{
+			conn.Close() 
+		}
 			
 				
 	}
+	kick_off_list_chan<-auth_message.Session_guid
 
 }
 
@@ -289,9 +293,9 @@ func push_backen_process(id_guid_chan chan id_guid_pair,push_conn_table * map[st
 				number,err:=redis.Int(c.Do("SCARD",id_guid.Id))
 				reply_content.Messages,err=redis.Strings(c.Do("SPOP",id_guid.Id,number))
 				if err!=nil {
-					reply_content.Reply="OK"
-				}else { 
 					reply_content.Reply="ERROR"
+				}else { 
+					reply_content.Reply="OK"
 					}
 
 				push_channel.Messages_chan<-reply_content	
@@ -421,7 +425,7 @@ func request_process(request_process_chan chan request_info,id_guid_chan chan id
 				}
 				//检查是否在线,在线就准备推送
 				guid,err:=redis.String(c.Do("HGET", "id_guid",one_message.Receiver_id))
-				if guid!=""&&err!=nil{
+				if guid!=""||err!=nil{
 					id_guid.Id=one_message.Receiver_id
 					id_guid.Guid=guid
 					id_guid_chan<-id_guid

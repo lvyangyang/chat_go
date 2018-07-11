@@ -3,6 +3,7 @@ import socket
 import json
 import struct
 import time
+import thread
 
 
 def json_load_byteified(file_handle):
@@ -98,13 +99,41 @@ def dict2auth_info(d):
 def dict2reply_info(d):
     return Reply_info(reply=d['Reply'], messages=d['Messages'])
 
+
+def receive_pipe_thread(auth_info_dict=''):
+
+    host_push = '127.0.0.1'
+    port_push = 2564
+    loginfo = Loginfo(request='relogin', thisid='12345',session_guid=auth_info_dict, time_stamp=int(time.time()))
+    loginfo_json = json.dumps(loginfo, default=lambda obj: obj.__dict__)
+    pre_length = struct.pack(">I", len(loginfo_json))
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect((host_push, port_push))
+    s.sendall(pre_length)
+    s.sendall(loginfo_json)
+    lne_bytes = s.recv(4)
+    len_auth_info = struct.unpack(">I", lne_bytes)
+    json_auth_info = s.recv(len_auth_info[0])
+    reply_auth_dict = json_loads_byteified(json_auth_info)
+    print(reply_auth_dict)
+    if reply_auth_dict['Content'] != 'AUTH':
+        return 0
+    print('get into thread')
+    lne_bytes = s.recv(4)
+    len_reply = struct.unpack(">I", lne_bytes)
+    json_reply_info = s.recv(len_reply[0])
+    reply_info_dict = json_loads_byteified(json_reply_info)
+#    if reply_info_dict['Reply'] != 'OK':
+
+    print(reply_info_dict['Messages'])
+
+
 # login info
+
+
 loginfo = Loginfo(thisid='12345', password='12345', request='login', time_stamp=int(time.time()))
 loginfo_json = json.dumps(loginfo, default=lambda obj: obj.__dict__)
 pre_length = struct.pack(">I", len(loginfo_json))
-
-
-
 
 host = '127.0.0.1'
 port = 2563
@@ -121,9 +150,12 @@ json_auth_info = s.recv(len_auth_info[0])
 # 授权信息
 auth_info_dict = json_loads_byteified(json_auth_info)
 
+th=thread.start_new_thread(receive_pipe_thread, (auth_info_dict['Session_guid'],))
+time.sleep(2)
 # 发送
 send_meaasges = []
-send_meaasges.append(Message(sender_id='12345', receiver_id='12345', send_time_stamp=int(time.time()), message_content='test_message'))
+send_meaasges.append(
+    Message(sender_id='12345', receiver_id='12345', send_time_stamp=int(time.time()), message_content='test_message'))
 
 request = Request_info(thisid=auth_info_dict['Id'], request='send_message', messages=send_meaasges)
 request_json = json.dumps(request, default=lambda obj: obj.__dict__)
@@ -138,6 +170,7 @@ json_reply_info = s.recv(len_reply[0])
 reply_info_send_dict = json_loads_byteified(json_reply_info)
 print(reply_info_send_dict)
 # ------------
+#receive_pipe_thread(auth_info_dict=auth_info_dict['Session_guid'])
 
 # 拉取消息-----
 request = Request_info(thisid=auth_info_dict['Id'], request='get_message')
@@ -153,4 +186,5 @@ json_reply_info = s.recv(len_reply[0])
 reply_info_get_dict = json_loads_byteified(json_reply_info)
 
 print(reply_info_get_dict)
+time.sleep(30)
 s.close()

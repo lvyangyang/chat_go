@@ -1,11 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="2c80ba8b-7abd-43d4-aea4-a3541979e622" name="Default" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/chat_server/chat_server.go" beforeDir="false" afterPath="$PROJECT_DIR$/chat_server/chat_server.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/py_client_test/client.py" beforeDir="false" afterPath="$PROJECT_DIR$/py_client_test/client.py" afterDir="false" />
-    </list>
+    <list default="true" id="2c80ba8b-7abd-43d4-aea4-a3541979e622" name="Default" comment="" />
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="TRACKING_ENABLED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -18,8 +14,8 @@
       <file leaf-file-name="client.py" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/py_client_test/client.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="403">
-              <caret line="169" selection-start-line="169" selection-end-line="169" />
+            <state relative-caret-position="2775">
+              <caret line="185" column="59" lean-forward="true" selection-start-line="185" selection-start-column="59" selection-end-line="185" selection-end-column="59" />
               <folding>
                 <element signature="e#24#37#0" expanded="true" />
               </folding>
@@ -127,7 +123,7 @@
       <window_info anchor="bottom" id="Event Log" order="7" sideWeight="0.50026953" side_tool="true" weight="0.3381001" />
       <window_info anchor="bottom" id="Version Control" order="7" />
       <window_info anchor="bottom" id="Python Console" order="7" />
-      <window_info active="true" anchor="bottom" id="Run" order="2" visible="true" weight="0.28438228" />
+      <window_info anchor="bottom" id="Run" order="2" weight="0.28438228" />
       <window_info id="Structure" order="1" side_tool="true" weight="0.25" />
       <window_info anchor="bottom" id="Terminal" order="7" />
       <window_info id="Favorites" order="2" side_tool="true" />
@@ -322,8 +318,8 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/py_client_test/client.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="403">
-          <caret line="169" selection-start-line="169" selection-end-line="169" />
+        <state relative-caret-position="2775">
+          <caret line="185" column="59" lean-forward="true" selection-start-line="185" selection-start-column="59" selection-end-line="185" selection-end-column="59" />
           <folding>
             <element signature="e#24#37#0" expanded="true" />
           </folding>
